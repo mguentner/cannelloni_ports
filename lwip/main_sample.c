@@ -66,9 +66,9 @@ void init_system(void) {
   IP4_ADDR(&cannelloni_handle.Init.addr, 10, 10, 10, 10);
   cannelloni_handle.Init.can_buf_size = CNL_BUF_SIZE;
   cannelloni_handle.Init.can_rx_buf = rx_buf;
-  cannelloni_handle.Init.can_rx_fn = NULL;
+  cannelloni_handle.Init.can_rx_fn = my_can_receive;
   cannelloni_handle.Init.can_tx_buf = tx_buf;
-  cannelloni_handle.Init.can_tx_fn = NULL;
+  cannelloni_handle.Init.can_tx_fn = my_can_transmit;
   cannelloni_handle.Init.port = 20000;
   cannelloni_handle.Init.remote_port = 20000;
 
