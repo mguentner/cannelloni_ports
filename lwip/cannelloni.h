@@ -70,8 +70,8 @@ struct canfd_frame  {
 	uint8_t    data[CNL_CANFD_MAX_DLEN] __attribute__((aligned(8)));
 };
 
-typedef void (*cnl_can_tx_fn)(struct canfd_frame *const);
-typedef void (*cnl_can_rx_fn)(void);
+typedef void (*cnl_can_tx_fn)(cannelloni_handle_t *const handle, struct canfd_frame *const);
+typedef void (*cnl_can_rx_fn)(cannelloni_handle_t *const handle);
 
 typedef struct {
   struct {
@@ -83,6 +83,7 @@ typedef struct {
     struct canfd_frame *can_rx_buf;
     cnl_can_tx_fn can_tx_fn;
     cnl_can_rx_fn can_rx_fn;
+    void *user_data;
   } Init;
 
   volatile int32_t can_tx_frames_pos;

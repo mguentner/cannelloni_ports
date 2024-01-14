@@ -30,7 +30,7 @@ struct canfd_frame rx_buf[CNL_BUF_SIZE];
 extern volatile uint8_t tcp_timeout = 0;
 extern volatile uint8_t arp_timeout = 0;
 
-void my_can_transmit(struct canfd_frame *frame) {
+void my_can_transmit(cannelloni_handle_t *const handle, struct canfd_frame *frame) {
   //write data in canfd_frame to interface...
     uint32_t dataLow = frame->data[0] << 24 |
     		           frame->data[1] << 16 |
@@ -42,11 +42,11 @@ void my_can_transmit(struct canfd_frame *frame) {
 	           	   	    frame->data[7];
 }
 
-void my_can_receive(void) {
+void my_can_receive(cannelloni_handle_t *const handle) {
   if (is_can_frame_pending()) {
     CanMessage msg;
     read_can_frame_from_controller(&msg);
-		struct canfd_frame *frame = get_can_rx_frame(&cannelloni_handle);
+		struct canfd_frame *frame = get_can_rx_frame(&handle);
 		if (frame) {
 			frame->can_id = msg.id;
 			frame->len = msg.len;

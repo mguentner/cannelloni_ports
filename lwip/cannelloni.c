@@ -161,7 +161,7 @@ void transmit_can_frames(cannelloni_handle_t *const handle)
   if (!handle->Init.can_tx_fn)
     return;
   if (handle->can_tx_frames_pos >= 0) {
-    handle->Init.can_tx_fn(&(handle->Init.can_tx_buf[handle->can_tx_frames_pos]));
+    handle->Init.can_tx_fn(handle, &(handle->Init.can_tx_buf[handle->can_tx_frames_pos]));
     handle->can_tx_frames_pos--;
   }
 }
@@ -171,7 +171,7 @@ void receive_can_frames(cannelloni_handle_t* handle)
   if (!handle->Init.can_rx_fn) {
     return;
   }
-  handle->Init.can_rx_fn();
+  handle->Init.can_rx_fn(handle);
 }
 
 void run_cannelloni(cannelloni_handle_t *const handle)
