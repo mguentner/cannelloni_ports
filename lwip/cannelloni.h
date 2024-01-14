@@ -23,12 +23,8 @@
 #define _CANNELLONI_H
 
 #include "stdint.h"
-
-#define CANNELLONI_PORT 20000
-#define CANNELLONI_REMOTE_ADDR(x) IP4_ADDR(x,10,1,0,2)
-#define CANNELLONI_REMOTE_PORT 20000
-#define CANNELLONI_CAN_BUFFER_SIZE 10
-#define CANNELLONI_UDP_BUFFER_SIZE 10
+#include "ip_addr.h"
+#include "pbuf.h"
 
 /* Base size of a canfd_frame (canid + dlc) */
 #define CANNELLONI_FRAME_BASE_SIZE 5
@@ -38,7 +34,7 @@
 #define CANNELLONI_FRAME_VERSION 2
 #define CANFD_FRAME              0x80
 
-enum op_codes {DATA, ACK, NACK};
+enum op_codes {CNL_DATA, CNL_ACK, CNL_NACK};
 
 struct __attribute__((__packed__)) cannelloni_data_packet {
   /* Version */
@@ -63,29 +59,52 @@ typedef uint32_t canid_t;
 #define CAN_EFF_MASK 0x1FFFFFFFU /* extended frame format (EFF) */
 #define CAN_ERR_MASK 0x1FFFFFFFU /* omit EFF, RTR, ERR flags */
 
-#define CANFD_MAX_DLEN 8
+#ifndef CNL_CANFD_MAX_DLEN
+#define CNL_CANFD_MAX_DLEN 8
+#endif
 
 struct canfd_frame  {
 	canid_t can_id;  /* 32 bit CAN_ID + EFF/RTR/ERR flags */
 	uint8_t    len;     /* frame payload length in byte */
 	uint8_t    flags;   /* additional flags for CAN FD */
-	uint8_t    data[CANFD_MAX_DLEN] __attribute__((aligned(8)));
+	uint8_t    data[CNL_CANFD_MAX_DLEN] __attribute__((aligned(8)));
 };
+
+typedef struct cannelloni_handle cannelloni_handle_t;
+
+typedef void (*cnl_can_tx_fn)(cannelloni_handle_t *const, struct canfd_frame *const);
+typedef void (*cnl_can_rx_fn)(cannelloni_handle_t *const);
+
+typedef struct cannelloni_handle {
+  struct {
+    uint16_t port;
+    ip_addr_t addr;
+    uint16_t remote_port;
+    uint8_t can_buf_size;
+    struct canfd_frame *can_tx_buf;
+    struct canfd_frame *can_rx_buf;
+    cnl_can_tx_fn can_tx_fn;
+    cnl_can_rx_fn can_rx_fn;
+    void *user_data;
+  } Init;
+
+  volatile int32_t can_tx_frames_pos;
+  volatile int32_t can_rx_frames_pos;
+  uint32_t sequence_number;
+  struct udp_pcb *udp_pcb;
+  uint32_t udp_rx_count;
+} cannelloni_handle_t;
 
 /* Helper function to get the real length of a frame */
 uint8_t canfd_len(const struct canfd_frame *f);
 
-void init_cannelloni(void);
+void init_cannelloni(cannelloni_handle_t *const handle);
 
-void run_cannelloni(void);
+void run_cannelloni(cannelloni_handle_t *const handle);
 
-void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *addr, uint16_t port);
+void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, uint16_t port);
 
-struct canfd_frame* get_can_tx_frame();
-struct canfd_frame* get_can_rx_frame();
-
-extern void (*can_tx_function)(struct canfd_frame *f);
-extern void (*can_rx_function)();
-
+struct canfd_frame* get_can_tx_frame(cannelloni_handle_t *const handle);
+struct canfd_frame* get_can_rx_frame(cannelloni_handle_t *const handle);
 
 #endif

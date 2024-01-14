@@ -1,7 +1,6 @@
 # cannelloni lwip port
 
 `main_sample.c` serves as documentation as code on how to use `cannelloni.c`.
-Adjust `cannelloni_platform` for your platform.
 
 # License
 
