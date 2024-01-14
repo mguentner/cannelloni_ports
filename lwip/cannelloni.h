@@ -70,10 +70,12 @@ struct canfd_frame  {
 	uint8_t    data[CNL_CANFD_MAX_DLEN] __attribute__((aligned(8)));
 };
 
-typedef void (*cnl_can_tx_fn)(cannelloni_handle_t *const handle, struct canfd_frame *const);
-typedef void (*cnl_can_rx_fn)(cannelloni_handle_t *const handle);
+typedef struct cannelloni_handle cannelloni_handle_t;
 
-typedef struct {
+typedef void (*cnl_can_tx_fn)(cannelloni_handle_t *const, struct canfd_frame *const);
+typedef void (*cnl_can_rx_fn)(cannelloni_handle_t *const);
+
+typedef struct cannelloni_handle {
   struct {
     uint16_t port;
     ip_addr_t addr;
