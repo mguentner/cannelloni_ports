@@ -54,6 +54,15 @@ static struct canfd_frame *queue_take(frames_queue_t *q)
   return frame;
 }
 
+static struct canfd_frame *queue_peek(frames_queue_t *q)
+{
+  if (q->head == q->tail) {
+    return NULL;
+  }
+
+  return &(q->frames[q->head]);
+}
+
 void init_cannelloni(cannelloni_handle_t* handle)
 {
   handle->sequence_number = 0;
@@ -189,9 +198,11 @@ void transmit_can_frames(cannelloni_handle_t *const handle)
 {
   if (!handle->Init.can_tx_fn)
     return;
-  struct canfd_frame *frame = queue_take(&handle->tx_queue);
+  struct canfd_frame *frame = queue_peek(&handle->tx_queue);
   if (frame) {
-    handle->Init.can_tx_fn(handle, frame);
+    if (handle->Init.can_tx_fn(handle, frame)) {
+      queue_take(&handle->tx_queue);
+    }
   }
 }
 
