@@ -24,12 +24,43 @@
 #include "udp.h"
 #include "cannelloni.h"
 
+static void queue_init(frames_queue_t *q, struct canfd_frame *frames, size_t count)
+{
+  q->head = 0;
+  q->tail = 0;
+  q->count = count;
+  q->frames = frames;
+}
+
+static struct canfd_frame *queue_put(frames_queue_t *q)
+{
+  if ((q->tail + 1) % q->count == q->head) {
+    return NULL;
+  }
+
+  struct canfd_frame *frame = &(q->frames[q->tail]);
+  q->tail = (q->tail + 1) % q->count;
+  return frame;
+}
+
+static struct canfd_frame *queue_take(frames_queue_t *q)
+{
+  if (q->head == q->tail) {
+    return NULL;
+  }
+
+  struct canfd_frame *frame = &(q->frames[q->head]);
+  q->head = (q->head + 1) % q->count;
+  return frame;
+}
+
 void init_cannelloni(cannelloni_handle_t* handle)
 {
-  handle->can_rx_frames_pos = -1;
-  handle->can_tx_frames_pos = -1;
   handle->sequence_number = 0;
   handle->udp_rx_count = 0;
+
+  queue_init(&handle->tx_queue, handle->Init.can_tx_buf, handle->Init.can_buf_size);
+  queue_init(&handle->rx_queue, handle->Init.can_rx_buf, handle->Init.can_buf_size);
 
   handle->udp_pcb = udp_new();
   if (handle->udp_pcb == NULL) {
@@ -72,7 +103,7 @@ void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, con
           break;
         }
         /* We got at least a complete canfd_frame header */
-        struct canfd_frame *frame = get_can_tx_frame(handle);
+        struct canfd_frame *frame = queue_put(&handle->tx_queue);
         if (!frame) {
           /* Allocation error */
           error = 1;
@@ -111,58 +142,56 @@ void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, con
 
 void transmit_udp_frame(cannelloni_handle_t* handle)
 {
-  if (handle->can_rx_frames_pos >= 0) {
-    struct cannelloni_data_packet *dataPacket;
-
-    struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, 1200, PBUF_RAM);
-    uint16_t length = 0;
-    uint16_t frameCount = 0;
-    struct canfd_frame *frame;
-    uint8_t *data = (uint8_t*) p->payload + CANNELLONI_DATA_PACKET_BASE_SIZE;
-    if (!p) {
-      /* allocation error */
-      return;
-    }
-
-    while(handle->can_rx_frames_pos >= 0) {
-      frame = &handle->Init.can_rx_buf[handle->can_rx_frames_pos];
-      data[0] = frame->can_id >> 24 & 0x000000ff;
-      data[1] = frame->can_id >> 16 & 0x000000ff;
-      data[2] = frame->can_id >> 8  & 0x000000ff;
-      data[3] = frame->can_id       & 0x000000ff;
-      /* += 4 */
-      data += sizeof(canid_t);
-      *data = frame->len;
-      /* += 1 */
-      data += sizeof(frame->len);
-      memcpy(data, frame->data, canfd_len(frame));
-      data+=canfd_len(frame);
-      frameCount++;
-      handle->can_rx_frames_pos--;
-    }
-
-    dataPacket = (struct cannelloni_data_packet*) p->payload;
-    dataPacket->version = CANNELLONI_FRAME_VERSION;
-    dataPacket->op_code = CNL_DATA;
-    dataPacket->seq_no = handle->sequence_number++;
-    dataPacket->count = htons(frameCount);
-
-    length = (uint8_t*)data-(uint8_t*)p->payload;
-    p->tot_len = length;
-    p->len = length;
-
-    udp_sendto(handle->udp_pcb, p, &(handle->Init.addr), handle->Init.remote_port);
-    pbuf_free(p);
+  struct canfd_frame *frame = queue_take(&handle->rx_queue);
+  if (!frame) {
+    return;
   }
+
+  struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, 1200, PBUF_RAM);
+  uint16_t length = 0;
+  uint16_t frameCount = 0;
+  uint8_t *data = (uint8_t*) p->payload + CANNELLONI_DATA_PACKET_BASE_SIZE;
+  if (!p) {
+    /* allocation error */
+    return;
+  }
+
+  do {
+    data[0] = frame->can_id >> 24 & 0x000000ff;
+    data[1] = frame->can_id >> 16 & 0x000000ff;
+    data[2] = frame->can_id >> 8  & 0x000000ff;
+    data[3] = frame->can_id       & 0x000000ff;
+    /* += 4 */
+    data += sizeof(canid_t);
+    *data = frame->len;
+    /* += 1 */
+    data += sizeof(frame->len);
+    memcpy(data, frame->data, canfd_len(frame));
+    data+=canfd_len(frame);
+    frameCount++;
+  } while (frame = queue_take(&handle->rx_queue));
+
+  struct cannelloni_data_packet *dataPacket = (struct cannelloni_data_packet*) p->payload;
+  dataPacket->version = CANNELLONI_FRAME_VERSION;
+  dataPacket->op_code = CNL_DATA;
+  dataPacket->seq_no = handle->sequence_number++;
+  dataPacket->count = htons(frameCount);
+
+  length = (uint8_t*)data-(uint8_t*)p->payload;
+  p->tot_len = length;
+  p->len = length;
+
+  udp_sendto(handle->udp_pcb, p, &(handle->Init.addr), handle->Init.remote_port);
+  pbuf_free(p);
 }
 
 void transmit_can_frames(cannelloni_handle_t *const handle)
 {
   if (!handle->Init.can_tx_fn)
     return;
-  if (handle->can_tx_frames_pos >= 0) {
-    handle->Init.can_tx_fn(handle, &(handle->Init.can_tx_buf[handle->can_tx_frames_pos]));
-    handle->can_tx_frames_pos--;
+  struct canfd_frame *frame = queue_take(&handle->tx_queue);
+  if (frame) {
+    handle->Init.can_tx_fn(handle, frame);
   }
 }
 
@@ -181,22 +210,9 @@ void run_cannelloni(cannelloni_handle_t *const handle)
   transmit_udp_frame(handle);
 }
 
-struct canfd_frame* get_can_tx_frame(cannelloni_handle_t *const handle)
+struct canfd_frame *get_can_rx_frame(cannelloni_handle_t *const handle)
 {
-  if (handle->can_tx_frames_pos < handle->Init.can_buf_size) {
-    handle->can_tx_frames_pos++;
-    return &(handle->Init.can_tx_buf[handle->can_tx_frames_pos]);
-  }
-  return NULL;
-}
-
-struct canfd_frame* get_can_rx_frame(cannelloni_handle_t *const handle)
-{
-  if (handle->can_rx_frames_pos < handle->Init.can_buf_size) {
-    handle->can_rx_frames_pos++;
-    return &(handle->Init.can_rx_buf[handle->can_rx_frames_pos]);
-  }
-  return NULL;
+  return queue_put(&handle->rx_queue);
 }
 
 uint8_t canfd_len(const struct canfd_frame *f)
