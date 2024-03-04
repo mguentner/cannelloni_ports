@@ -84,7 +84,7 @@ void init_cannelloni(cannelloni_handle_t* handle)
 void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, uint16_t port)
 {
   cannelloni_handle_t *const handle = (cannelloni_handle_t *const)arg;
-  if (p != NULL) {
+  if (p != NULL && p->tot_len > CANNELLONI_DATA_PACKET_BASE_SIZE) {
     struct cannelloni_data_packet *data;
     uint8_t error = 0;
     /* Check for OP Code */
@@ -95,10 +95,6 @@ void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, con
     }
     if (data->op_code != CNL_DATA) {
       /* Received wrong OP code */
-      error = 1;
-    }
-    if (ntohs(data->count) == 0) {
-      /* Received empty packet */
       error = 1;
     }
     if (!error) {
@@ -145,6 +141,9 @@ void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, con
         }
       }
     }
+  }
+
+  if(p) {
     pbuf_free(p);
   }
 }
