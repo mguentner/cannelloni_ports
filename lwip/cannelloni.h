@@ -70,6 +70,13 @@ struct canfd_frame  {
 	uint8_t    data[CNL_CANFD_MAX_DLEN] __attribute__((aligned(8)));
 };
 
+typedef struct {
+  size_t head;
+  size_t tail;
+  size_t count;
+  struct canfd_frame *frames;
+} frames_queue_t;
+
 typedef struct cannelloni_handle cannelloni_handle_t;
 
 typedef void (*cnl_can_tx_fn)(cannelloni_handle_t *const, struct canfd_frame *const);
@@ -88,8 +95,9 @@ typedef struct cannelloni_handle {
     void *user_data;
   } Init;
 
-  volatile int32_t can_tx_frames_pos;
-  volatile int32_t can_rx_frames_pos;
+  frames_queue_t tx_queue;
+  frames_queue_t rx_queue;
+
   uint32_t sequence_number;
   struct udp_pcb *udp_pcb;
   uint32_t udp_rx_count;
@@ -104,7 +112,6 @@ void run_cannelloni(cannelloni_handle_t *const handle);
 
 void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, uint16_t port);
 
-struct canfd_frame* get_can_tx_frame(cannelloni_handle_t *const handle);
 struct canfd_frame* get_can_rx_frame(cannelloni_handle_t *const handle);
 
 #endif
