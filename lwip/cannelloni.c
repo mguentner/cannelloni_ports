@@ -108,31 +108,41 @@ void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, con
           break;
         }
         /* We got at least a complete canfd_frame header */
+        canid_t can_id = (rawData[pos] << 24) | (rawData[pos+1] << 16) | (rawData[pos+2] << 8) | (rawData[pos+3]);
+        pos += sizeof(canid_t);
+
+        uint8_t len = rawData[pos++];
+        uint8_t dlc = len & ~CANFD_FRAME;
+
+        /* If this is a CAN FD frame, also retrieve the flags */
+        uint8_t flags = 0;
+        if (len & CANFD_FRAME) {
+          flags = rawData[pos++];
+        }
+        /* RTR Frames have no data section although they have a dlc */
+        if ((can_id & CAN_RTR_FLAG) == 0) {
+          /* Check again now that we know the dlc */
+          if (pos + dlc > p->tot_len) {
+            /* Received incomplete packet / can header corrupt! */
+            error = 1;
+            break;
+          }
+        }
+
         struct canfd_frame *frame = queue_put(&handle->tx_queue);
         if (!frame) {
           /* Allocation error */
           error = 1;
           break;
         }
-        frame->can_id = (rawData[pos] << 24) | (rawData[pos+1] << 16) | (rawData[pos+2] << 8) | (rawData[pos+3]);;
-        pos += sizeof(canid_t);
+        frame->can_id = can_id;
+        frame->len = len;
+        frame->flags = flags;
 
-        frame->len = rawData[pos++];
-
-        /* If this is a CAN FD frame, also retrieve the flags */
-        if (frame->len & CANFD_FRAME) {
-          frame->flags = rawData[pos++];
-        }
-        /* RTR Frames have no data section although they have a dlc */
-        if ((frame->can_id & CAN_RTR_FLAG) == 0) {
-          /* Check again now that we know the dlc */
-          if (pos+canfd_len(frame) > p->tot_len) {
-            /* Received incomplete packet / can header corrupt! */
-            error = 1;
-            break;
-          }
-          memcpy(frame->data, rawData + pos, canfd_len(frame));
-          pos += canfd_len(frame);
+        /* RTR Frames have no data */
+        if ((can_id & CAN_RTR_FLAG) == 0) {
+          memcpy(frame->data, rawData + pos, dlc);
+          pos += dlc;
         }
       }
     }
