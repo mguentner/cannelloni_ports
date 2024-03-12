@@ -161,13 +161,13 @@ void transmit_udp_frame(cannelloni_handle_t* handle)
   }
 
   struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, 1200, PBUF_RAM);
-  uint16_t length = 0;
-  uint16_t frameCount = 0;
-  uint8_t *data = (uint8_t*) p->payload + CANNELLONI_DATA_PACKET_BASE_SIZE;
   if (!p) {
     /* allocation error */
     return;
   }
+  uint16_t length = 0;
+  uint16_t frameCount = 0;
+  uint8_t *data = (uint8_t*) p->payload + CANNELLONI_DATA_PACKET_BASE_SIZE;
 
   do {
     data[0] = frame->can_id >> 24 & 0x000000ff;
