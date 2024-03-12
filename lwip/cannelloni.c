@@ -165,22 +165,21 @@ void transmit_udp_frame(cannelloni_handle_t* handle)
     /* allocation error */
     return;
   }
-  uint16_t length = 0;
+  uint16_t pos = CANNELLONI_DATA_PACKET_BASE_SIZE;
+  uint8_t *data = (uint8_t*) p->payload;
   uint16_t frameCount = 0;
-  uint8_t *data = (uint8_t*) p->payload + CANNELLONI_DATA_PACKET_BASE_SIZE;
 
   do {
-    data[0] = frame->can_id >> 24 & 0x000000ff;
-    data[1] = frame->can_id >> 16 & 0x000000ff;
-    data[2] = frame->can_id >> 8  & 0x000000ff;
-    data[3] = frame->can_id       & 0x000000ff;
-    /* += 4 */
-    data += sizeof(canid_t);
-    *data = frame->len;
-    /* += 1 */
-    data += sizeof(frame->len);
-    memcpy(data, frame->data, canfd_len(frame));
-    data+=canfd_len(frame);
+    data[pos + 0] = frame->can_id >> 24 & 0x000000ff;
+    data[pos + 1] = frame->can_id >> 16 & 0x000000ff;
+    data[pos + 2] = frame->can_id >> 8  & 0x000000ff;
+    data[pos + 3] = frame->can_id       & 0x000000ff;
+    pos += sizeof(canid_t);
+
+    data[pos++] = frame->len;
+
+    memcpy(&data[pos], frame->data, canfd_len(frame));
+    pos += canfd_len(frame);
     frameCount++;
   } while (frame = queue_take(&handle->rx_queue));
 
@@ -190,9 +189,8 @@ void transmit_udp_frame(cannelloni_handle_t* handle)
   dataPacket->seq_no = handle->sequence_number++;
   dataPacket->count = htons(frameCount);
 
-  length = (uint8_t*)data-(uint8_t*)p->payload;
-  p->tot_len = length;
-  p->len = length;
+  p->tot_len = pos;
+  p->len = pos;
 
   udp_sendto(handle->udp_pcb, p, &(handle->Init.addr), handle->Init.remote_port);
   pbuf_free(p);
