@@ -108,7 +108,7 @@ void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, con
           break;
         }
         /* We got at least a complete canfd_frame header */
-        canid_t can_id = (rawData[pos] << 24) | (rawData[pos+1] << 16) | (rawData[pos+2] << 8) | (rawData[pos+3]);;
+        canid_t can_id = (rawData[pos] << 24) | (rawData[pos+1] << 16) | (rawData[pos+2] << 8) | (rawData[pos+3]);
         pos += sizeof(canid_t);
 
         uint8_t len = rawData[pos++];
