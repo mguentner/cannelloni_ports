@@ -210,10 +210,12 @@ void transmit_can_frames(cannelloni_handle_t *const handle)
   if (!handle->Init.can_tx_fn)
     return;
   struct canfd_frame *frame = queue_peek(&handle->tx_queue);
-  if (frame) {
-    if (handle->Init.can_tx_fn(handle, frame)) {
-      queue_take(&handle->tx_queue);
-    }
+  while (frame && handle->Init.can_tx_fn(handle, frame)) {
+    /* drop CAN frame as it was processed by CAN driver */
+    queue_take(&handle->tx_queue);
+
+    /* peek at next CAN frame */
+    frame = queue_peek(&handle->tx_queue);
   }
 }
 
