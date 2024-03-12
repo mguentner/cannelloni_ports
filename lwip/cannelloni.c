@@ -153,17 +153,17 @@ void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, con
   }
 }
 
-void transmit_udp_frame(cannelloni_handle_t* handle)
+bool transmit_udp_frame(cannelloni_handle_t* handle)
 {
   struct canfd_frame *frame = queue_peek(&handle->rx_queue);
   if (!frame) {
-    return;
+    return false;
   }
 
   struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, 1200, PBUF_RAM);
   if (!p) {
     /* allocation error */
-    return;
+    return false;
   }
   uint16_t pos = CANNELLONI_DATA_PACKET_BASE_SIZE;
   uint8_t *data = (uint8_t*) p->payload;
@@ -200,6 +200,9 @@ void transmit_udp_frame(cannelloni_handle_t* handle)
 
   udp_sendto(handle->udp_pcb, p, &(handle->Init.addr), handle->Init.remote_port);
   pbuf_free(p);
+
+  /* return TRUE if queue contains more CAN frames */
+  return frame != NULL;
 }
 
 void transmit_can_frames(cannelloni_handle_t *const handle)
@@ -226,7 +229,7 @@ void run_cannelloni(cannelloni_handle_t *const handle)
 {
   transmit_can_frames(handle);
   receive_can_frames(handle);
-  transmit_udp_frame(handle);
+  while (transmit_udp_frame(handle));
 }
 
 struct canfd_frame *get_can_rx_frame(cannelloni_handle_t *const handle)
