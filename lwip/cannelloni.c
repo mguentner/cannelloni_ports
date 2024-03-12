@@ -155,7 +155,7 @@ void handle_cannelloni_frame(void *arg, struct udp_pcb *pcb, struct pbuf *p, con
 
 void transmit_udp_frame(cannelloni_handle_t* handle)
 {
-  struct canfd_frame *frame = queue_take(&handle->rx_queue);
+  struct canfd_frame *frame = queue_peek(&handle->rx_queue);
   if (!frame) {
     return;
   }
@@ -169,7 +169,10 @@ void transmit_udp_frame(cannelloni_handle_t* handle)
   uint8_t *data = (uint8_t*) p->payload;
   uint16_t frameCount = 0;
 
-  do {
+  while (frame && pos + CANNELLONI_FRAME_BASE_SIZE + canfd_len(frame) < p->tot_len) {
+    /* CAN frame fits in current UDP datagram, remove it from queue */
+    frame = queue_take(&handle->rx_queue);
+
     data[pos + 0] = frame->can_id >> 24 & 0x000000ff;
     data[pos + 1] = frame->can_id >> 16 & 0x000000ff;
     data[pos + 2] = frame->can_id >> 8  & 0x000000ff;
@@ -181,7 +184,10 @@ void transmit_udp_frame(cannelloni_handle_t* handle)
     memcpy(&data[pos], frame->data, canfd_len(frame));
     pos += canfd_len(frame);
     frameCount++;
-  } while (frame = queue_take(&handle->rx_queue));
+
+    /* peek at next CAN frame */
+    frame = queue_peek(&handle->rx_queue);
+  }
 
   struct cannelloni_data_packet *dataPacket = (struct cannelloni_data_packet*) p->payload;
   dataPacket->version = CANNELLONI_FRAME_VERSION;
